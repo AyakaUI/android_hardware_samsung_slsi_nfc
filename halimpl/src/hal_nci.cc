@@ -173,15 +173,7 @@ void hal_nci_send_prop_fw_cfg(uint8_t product) {
 }
 
 int nci_read_payload(tNFC_HAL_MSG* msg) {
-  tNFC_NCI_PKT* pkt = &msg->nci_packet;
-  int ret;
-
-  ret = device_read(NCI_PAYLOAD(pkt), NCI_LEN(pkt));
-  if (ret != (int)NCI_LEN(pkt)) {
-    OSI_mem_free((tOSI_MEM_HANDLER)msg);
-    OSI_loge("Failed to read payload");
-    return ret;
-  }
+  int ret = msg->param[2];
 
   data_trace("Recv", NCI_HDR_SIZE + ret, msg->param);
   return ret;

@@ -71,26 +71,7 @@ int nfc_fw_send_data(uint8_t* data, int len) {
 }
 
 int fw_read_payload(tNFC_HAL_MSG* msg) {
-  tNFC_FW_PKT* fw_pkt = &msg->fw_packet;
-  uint8_t len_high;
-  int ret;
-
-  // Read high length byte
-  ret = device_read(&len_high, 1);
-  if (ret != 1) {
-    OSI_mem_free((tOSI_MEM_HANDLER)msg);
-    OSI_loge("Failed to read length(high) of bootloader cmd");
-    return ret;
-  }
-  fw_pkt->len += len_high << 8;
-
-  // Read payload
-  ret = device_read(fw_pkt->payload, fw_pkt->len);
-  if (ret != (int)fw_pkt->len) {
-    OSI_mem_free((tOSI_MEM_HANDLER)msg);
-    OSI_loge("Failed to read payload");
-    return ret;
-  }
+  int ret = msg->param[2];
 
   data_trace("Recv", NCI_HDR_SIZE + 1 + ret, msg->param);
   return ret;

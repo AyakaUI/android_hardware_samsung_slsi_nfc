@@ -235,8 +235,13 @@ int device_read(uint8_t* buffer, size_t len) {
   while (len != 0) {
     ret = read(tr_driver, buffer + total, len);
     if (ret <= 0) {
-      OSI_loge("Read error ret = %d, errno = %d", ret, errno);
-      if (retry++ < 3 && (nfc_hal_info.flag & HAL_FLAG_RETRY_TRNS)) continue;
+      if (retry++ < 3 && (nfc_hal_info.flag & HAL_FLAG_RETRY_TRNS)){
+       OSI_delay(2);
+       continue;
+      }
+      else{
+        OSI_loge("Read error ret = %d, errno = %d, retry:%d", ret, errno,retry);
+      }
       break;
     }
 
@@ -251,12 +256,12 @@ void read_thread(void) {
   tOSI_QUEUE_HANDLER msg_que = NULL;
   tNFC_HAL_MSG* msg = NULL;
   fd_set rfds;
-  uint8_t header[NCI_HDR_SIZE];
+  uint8_t header[FW_HDR_SIZE];
   int close_pipe[2];
   int max_fd;
   struct timeval tv;
   struct timeval* ptv = NULL;
-  int ret;
+  int ret, header_len;
 
   OSI_logt("enter");
   /* get msg que */
@@ -313,10 +318,15 @@ void read_thread(void) {
     }
 
     /* read 3 bytes (header)*/
-    ret = device_read(header, NCI_HDR_SIZE);
+    if(dev_state == NFC_DEV_MODE_BOOTLOADER){
+        header_len = FW_HDR_SIZE;
+    }else{
+        header_len = NCI_HDR_SIZE;
+    }
+    ret = device_read(header, header_len);
     if (ret == 0)
       continue;
-    else if (ret != NCI_HDR_SIZE) {
+    else if (ret != header_len) {
       OSI_loge("Reading NCI header failed");
       continue;
     }
@@ -328,12 +338,18 @@ void read_thread(void) {
       break;
     }
 
-    /* payload will read upper layer */
     msg->event = HAL_EVT_READ;
-    memcpy((void*)msg->param, (void*)header, NCI_HDR_SIZE);
-
-    ret = OSI_queue_put(msg_que, (void*)msg);
-    OSI_logd("Sent message to HAL message task, remind que: %d", ret);
+    memcpy((void*)msg->param, (void*)header, header_len);
+    //fw response always has length less than 256, ignore 3rd byte
+    ret = device_read((uint8_t *)msg->param + header_len, header[2]);
+    if (ret != (int)header[2]) {
+       OSI_mem_free((tOSI_MEM_HANDLER)msg);
+       OSI_loge("Failed to read payload, expect %d while got %d!",header[2], ret);
+    }
+    else{
+      ret = OSI_queue_put(msg_que, (void*)msg);
+      OSI_logd("Sent message to HAL message task, remind que: %d", ret);
+    }
   }
 
   pthread_mutex_lock(&tr_lock);
